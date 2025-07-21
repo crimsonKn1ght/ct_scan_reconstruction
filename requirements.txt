@@ -1,0 +1,6 @@
+torch>=1.7
+torchvision>=0.8
+numpy>=1.18
+h5py>=2.10
+tqdm>=4.50
+pytorch-msssim>=0.2
