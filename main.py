@@ -1,60 +1,85 @@
-import numpy as np, os, random, re
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"          # Uncomment to use specific GPUs
-import torch
+from __future__ import annotations
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,2,3"
+import argparse, torch, numpy as np
 
-from utils.train import train_model
-from utils.evaluate import evaluate_model
-from utils.inference import inference
-from utils.build_loaders import build_loaders
-
-
-print("PyTorch version:", torch.__version__)
-print("CUDA available:", torch.cuda.is_available())
-print("CUDA version in torch:", torch.version.cuda)
-print("cuDNN enabled:", torch.backends.cudnn.enabled)
-
+from tools.train import build_loaders, train_two_stage, inference_two_stage, evaluate_two_stage
 
 
 def set_seed(seed: int = 42):
+    import random
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--root_dir", type=str, default='/data/pradipta/Reconstruction/LoDoPaB/3384092/', help="LoDoPaB folder with HDF5 files")
+    p.add_argument("--save_path", type=str, default="/data/gourab/model_128_1.pth")
+    p.add_argument("--log_path", type=str, default="/data/gourab/training_128_1.csv")
+    p.add_argument("--output_dir", type=str, default="/data/gourab/predictions_128_1")
+    p.add_argument("--batch_size", type=int, default=15)
+    p.add_argument("--num_workers", type=int, default=0)
+    p.add_argument("--epochs", type=int, default=100)
+    p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--weight_decay", type=float, default=1e-4)
+    p.add_argument("--alpha", type=float, default=0.65)
+    p.add_argument("--beta", type=float, default=0.35)
+    p.add_argument("--factor", type=float, default=0.3)
+    p.add_argument("--patience", type=int, default=10)
+    p.add_argument("--norm", type=str, default="minmax", choices=["minmax","scale"])
+    p.add_argument("--scale_val", type=float, default=4096.0)
+    return p.parse_args()
+
+
 if __name__ == "__main__":
     set_seed(42)
+    args = parse_args()
 
-    root_dir    =       "/app/dataset/"
-    save_path   =       "/app/best_model.pth"
-    log_path    =       "/app/results.csv"
-    output_dir  =       "/app/saved_test_preds"
+    print("PyTorch:", torch.__version__)
+    print("CUDA available:", torch.cuda.is_available())
+    print("CUDA (torch):", torch.version.cuda)
+    print("cuDNN enabled:", torch.backends.cudnn.enabled)
 
     train_loader, val_loader, test_loader = build_loaders(
-        root_dir=root_dir,
-        batch_size=64,
+        root_dir=args.root_dir,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        norm=args.norm,
+        scale_val=args.scale_val,
     )
 
+    # ---------------------------
+    # Training (resume or scratch)
+    # ---------------------------
+    if os.path.exists(args.save_path):
+        print(f"🟢 Found checkpoint at {args.save_path}, resuming training...")
+    else:
+        print("🟢 No checkpoint found, starting training from scratch...")
 
-    print("🟢 Starting training...")
-    model, best_combined, best_ssim = train_model(
-        train_loader,
-        val_loader,
-        num_epochs=124,
-        save_path=save_path,
-        log_path=log_path,
-        alpha=0.85,
-        beta=0.15,
-        lr=1e-4,
-        weight_decay=1e-4,
-        factor=0.3,
-        patience=10,
-        # flg=True,
+    stage1, refiner, best_val = train_two_stage(
+        train_loader, val_loader,
+        num_epochs=args.epochs,
+        lr=args.lr,
+        save_path=args.save_path,
+        log_path=args.log_path,
+        alpha=args.alpha,
+        beta=args.beta,
+        weight_decay=args.weight_decay,
+        factor=args.factor,
+        patience=args.patience,
+        filter_type="ramp",
     )
-    print(f"✅ Training completed. Best Val SSIM: {best_ssim:.4f}")
+    print(f"✅ Training finished. Best Val Loss: {best_val:.6f}")
 
-    print("🟢 Running inference on test set...")
-    inference(model, test_loader, output_dir=output_dir)
-    print(f"✅ Predictions saved to '{output_dir}'.")
+    # ---------------------------
+    # Inference + Evaluation
+    # ---------------------------
+    print("🟢 Running inference...")
+    inference_two_stage(stage1, refiner, test_loader, output_dir=args.output_dir)
+    print(f"✅ Predictions saved to '{args.output_dir}'.")
 
-    print("🟢 Evaluating saved model on test set...")
-    evaluate_model(save_path, test_loader)
+    print("🟢 Evaluating saved models on test set...")
+    evaluate_two_stage(args.save_path, test_loader)
