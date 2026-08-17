@@ -1,5 +1,10 @@
 # End-to-End CT Reconstruction with Swin Transformer
 
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg?style=flat)](#installation)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg?style=flat)](#installation)
+[![timm](https://img.shields.io/badge/timm-Swin%20Transformer-blueviolet.svg?style=flat)](https://github.com/huggingface/pytorch-image-models)
+[![Dataset](https://img.shields.io/badge/dataset-LoDoPaB--style-lightgrey.svg?style=flat)](#dataset)
+
 This repository implements an **end-to-end CT image reconstruction pipeline** that maps **sinograms → reconstructed CT images** using deep learning.
 
 The system follows a **two-stage architecture**:
@@ -96,9 +101,9 @@ python main.py \
 
 ## Evaluation Metrics
 
-- **SSIM** — Structural Similarity Index
-- **PSNR** — Peak Signal-to-Noise Ratio
-- **MAE** — Mean Absolute Error
+- **SSIM**: Structural Similarity Index
+- **PSNR**: Peak Signal-to-Noise Ratio
+- **MAE**: Mean Absolute Error
 
 Metrics are computed during training, validation, and testing.
 
